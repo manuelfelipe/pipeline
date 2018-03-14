@@ -17,6 +17,7 @@ type ClusterModel struct {
 	Amazon           AmazonClusterModel
 	Azure            AzureClusterModel
 	Google           GoogleClusterModel
+	Dummy            DummyClusterModel
 }
 
 //AmazonClusterModel describes the amazon cluster model
@@ -47,6 +48,12 @@ type GoogleClusterModel struct {
 	NodeVersion    string
 	NodeCount      int
 	ServiceAccount string
+}
+
+type DummyClusterModel struct {
+	ClusterModelId    uint `gorm:"primary_key"`
+	KubernetesVersion string
+	NodeCount         int
 }
 
 //Save the cluster to DB
@@ -99,6 +106,10 @@ func (cs *ClusterModel) String() string {
 		buffer.WriteString(fmt.Sprintf("Node count: %d, Node version: %s",
 			cs.Google.NodeCount,
 			cs.Google.NodeVersion))
+	} else if cs.Cloud == constants.Dummy {
+		buffer.WriteString(fmt.Sprintf("Node count: %d, kubernetes version: %s",
+			cs.Dummy.NodeCount,
+			cs.Dummy.KubernetesVersion))
 	}
 
 	return buffer.String()
@@ -132,4 +143,9 @@ func GetSimpleClusterWithId(id uint) ClusterModel {
 //TableName sets the GoogleClusterModel's table name
 func (GoogleClusterModel) TableName() string {
 	return constants.TableNameGoogleProperties
+}
+
+//TableName sets the GoogleClusterModel's table name
+func (DummyClusterModel) TableName() string {
+	return constants.TableNameDummyProperties
 }
