@@ -68,7 +68,7 @@ imports:
   - database
   - vault
 - name: github.com/banzaicloud/banzai-types
-  version: 960468e5fa2dcc62dcaf2c42b79268358660d31d
+  version: eeb562fc95f482f8a3bfc808ba207ffbd9f951cb
   subpackages:
   - components
   - components/amazon
