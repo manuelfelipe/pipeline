@@ -8,9 +8,9 @@ import (
 	"github.com/ghodss/yaml"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"k8s.io/helm/pkg/proto/hapi/release"
 	"k8s.io/helm/pkg/timeconv"
 	"net/http"
-	"k8s.io/helm/pkg/proto/hapi/release"
 )
 
 // GetK8sConfig returns the Kubernetes config
@@ -305,4 +305,107 @@ func DeleteDeployment(c *gin.Context) {
 		Message: "Deployment deleted!",
 		Name:    name,
 	})
+}
+
+func HelmRepositoryGet(c *gin.Context) {
+	log := logger.WithFields(logrus.Fields{"tag": "HelmRepositoryGet"})
+	log.Info("Get helm repository")
+
+	commonCluster, ok := GetCommonClusterFromRequest(c)
+	if ok != true {
+		return
+	}
+	clusterName := commonCluster.GetName()
+	log.Debugln("clusterName:", clusterName)
+
+	response, err := helm.RepositoryGet(clusterName)
+	if err != nil {
+		log.Error("Error during get helm repo list.", err.Error())
+		c.JSON(http.StatusBadRequest, htype.ErrorResponse{
+			Code:    http.StatusBadRequest,
+			Message: "Error listing helm repos",
+			Error:   err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, response)
+	return
+}
+
+func HelmRepositoryAdd(c *gin.Context) {
+	log := logger.WithFields(logrus.Fields{"tag": "HelmRepositoryAdd"})
+	log.Info("Add helm repository")
+
+	commonCluster, ok := GetCommonClusterFromRequest(c)
+	if ok != true {
+		return
+	}
+	clusterName := commonCluster.GetName()
+	log.Debugln("ClusterName:", commonCluster.GetName())
+	var repo *helm.HelmRepo
+	err := c.BindJSON(&repo)
+	if err != nil {
+		log.Errorf("Error parsing request: %s", err.Error())
+		c.JSON(http.StatusBadRequest, htype.ErrorResponse{
+			Code:    http.StatusBadRequest,
+			Message: "Error parsing request",
+			Error:   err.Error(),
+		})
+		return
+	}
+	err = helm.RepositoryAdd(clusterName, repo)
+	if err != nil {
+		log.Error("Error during get helm repo list.", err.Error())
+		c.JSON(http.StatusBadRequest, htype.ErrorResponse{
+			Code:    http.StatusBadRequest,
+			Message: "Error adding helm repo",
+			Error:   err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, htype.DeleteResponse{
+		Status:  http.StatusOK,
+		Message: "resource successfully added.",
+		Name:    repo.Name})
+	return
+}
+
+func HelmRepositoryDelete(c *gin.Context) {
+	log := logger.WithFields(logrus.Fields{"tag": "HelmRepositoryDelete"})
+	log.Info("Delete helm repository")
+
+	commonCluster, ok := GetCommonClusterFromRequest(c)
+	if ok != true {
+		return
+	}
+	clusterName := commonCluster.GetName()
+	log.Debugln("clusterName:", clusterName)
+
+	repoName := c.Param("name")
+	log.Debugln("repoName:", repoName)
+
+	err := helm.RepositoryDelete(clusterName, repoName)
+	if err != nil {
+		log.Error("Error during get helm repo list.", err.Error())
+		if err.Error() == "helm repository not found!" {
+			c.JSON(http.StatusOK, htype.DeleteResponse{
+				Status:  http.StatusOK,
+				Message: err.Error(),
+				Name:    repoName})
+			return
+
+		}
+		c.JSON(http.StatusBadRequest, htype.ErrorResponse{
+			Code:    http.StatusBadRequest,
+			Message: "Error deleting helm repos",
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, htype.DeleteResponse{
+		Status:  http.StatusOK,
+		Message: "resource deleted successfully.",
+		Name:    repoName})
+	return
 }

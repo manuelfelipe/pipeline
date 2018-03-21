@@ -13,14 +13,27 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"k8s.io/helm/pkg/chartutil"
+	"k8s.io/helm/pkg/getter"
 	"k8s.io/helm/pkg/helm"
 	"k8s.io/helm/pkg/proto/hapi/chart"
 	rls "k8s.io/helm/pkg/proto/hapi/services"
+	"k8s.io/helm/pkg/repo"
 	"net/http"
+	"os"
 )
 
 var logger *logrus.Logger
 var log *logrus.Entry
+
+type HelmRepo struct {
+	Name     string `json:"name"`
+	Cache    string `json:"cache"`
+	URL      string `json:"url"`
+	CertFile string `json:"certFile"`
+	KeyFile  string `json:"keyFile"`
+	CAFile   string `json:"caFile"`
+	VaultKey string `json:"vaultKey"`
+}
 
 // Simple init for logging
 func init() {
@@ -281,4 +294,84 @@ func mergeValues(dest map[string]interface{}, src map[string]interface{}) map[st
 		dest[k] = mergeValues(destMap, nextMap)
 	}
 	return dest
+}
+
+func RepositoryGet(clusterName string) ([]*repo.Entry, error) {
+	repoPath := fmt.Sprintf("%s/repository/repositories.yaml", generateHelmRepoPath(clusterName))
+	log.Debugln("Helm config path:", repoPath)
+
+	f, err := repo.LoadRepositoriesFile(repoPath)
+	if err != nil {
+		return nil, err
+	}
+	if len(f.Repositories) == 0 {
+		return make([]*repo.Entry, 0), nil
+	}
+
+	return f.Repositories, nil
+}
+
+func RepositoryAdd(clusterName string, Hrepo *HelmRepo) error {
+
+	settings := createEnvSettings(generateHelmRepoPath(clusterName))
+	repoFile := settings.Home.RepositoryFile()
+	var f *repo.RepoFile
+	if _, err := os.Stat(repoFile); err != nil {
+		log.Infof("Creating %s", repoFile)
+		f = repo.NewRepoFile()
+	} else {
+		f, err = repo.LoadRepositoriesFile(repoFile)
+		if err != nil {
+			return errors.Wrap(err, "Cannot create a new ChartRepo")
+		}
+
+	}
+	c := repo.Entry{
+		Name:  Hrepo.Name,
+		URL:   Hrepo.URL,
+		Cache: settings.Home.CacheIndex(Hrepo.Name),
+	}
+
+	r, err := repo.NewChartRepository(&c, getter.All(settings))
+	if err != nil {
+		return errors.Wrap(err, "Cannot create a new ChartRepo")
+	}
+
+	if err := r.DownloadIndexFile(""); err != nil {
+		return nil
+	}
+
+	f.Add(&c)
+	if err := f.WriteFile(repoFile, 0644); err != nil {
+		return errors.Wrap(err, "cannot create file")
+	}
+	return nil
+}
+
+func RepositoryDelete(clusterName, repoName string) error {
+	repoPath := generateHelmRepoPath(clusterName)
+	settings := createEnvSettings(repoPath)
+	repoFile := settings.Home.RepositoryFile()
+	log.Debugln("Repo File:", repoFile)
+
+	r, err := repo.LoadRepositoriesFile(repoFile)
+	if err != nil {
+		return err
+	}
+
+	if !r.Remove(repoName) {
+		return errors.New("helm repository not found!")
+	}
+	if err := r.WriteFile(repoFile, 0644); err != nil {
+		return err
+	}
+
+	if _, err := os.Stat(settings.Home.CacheIndex(repoName)); err == nil {
+		err = os.Remove(settings.Home.CacheIndex(repoName))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+
 }

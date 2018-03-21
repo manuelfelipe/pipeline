@@ -6,6 +6,7 @@ import (
 
 	"github.com/banzaicloud/pipeline/api"
 	"github.com/banzaicloud/pipeline/auth"
+	"github.com/banzaicloud/pipeline/cluster"
 	"github.com/banzaicloud/pipeline/config"
 	"github.com/banzaicloud/pipeline/model"
 	"github.com/banzaicloud/pipeline/model/defaults"
@@ -17,7 +18,6 @@ import (
 	sessionManager "github.com/qor/session/manager"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
-	"github.com/banzaicloud/pipeline/cluster"
 )
 
 //Version of Pipeline
@@ -124,6 +124,9 @@ func main() {
 			orgs.PUT("/:orgid/clusters/:id/deployments/:name", api.UpgradeDeployment)
 			orgs.HEAD("/:orgid/clusters/:id/deployments/:name", api.HelmDeploymentStatus)
 			orgs.POST("/:orgid/clusters/:id/helminit", api.InitHelmOnCluster)
+			orgs.GET("/:orgid/clusters/:id/helm/repository", api.HelmRepositoryGet)
+			orgs.POST("/:orgid/clusters/:id/helm/repository", api.HelmRepositoryAdd)
+			orgs.DELETE("/:orgid/clusters/:id/helm/repository/:name", api.HelmRepositoryDelete)
 			orgs.GET("/:orgid/profiles/cluster/:type", api.GetClusterProfiles)
 			orgs.POST("/:orgid/profiles/cluster", api.AddClusterProfile)
 			orgs.PUT("/:orgid/profiles/cluster", api.UpdateClusterProfile)
