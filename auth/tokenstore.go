@@ -39,42 +39,42 @@ type inMemoryTokenStore struct {
 	store map[string]map[string]string
 }
 
-func (tokenStore *inMemoryTokenStore) Store(userId, token string) error {
+func (tokenStore *inMemoryTokenStore) Store(userID, tokenID string) error {
 	tokenStore.Lock()
 	defer tokenStore.Unlock()
 	var userTokens map[string]string
 	var ok bool
-	if userTokens, ok = tokenStore.store[userId]; !ok {
+	if userTokens, ok = tokenStore.store[userID]; !ok {
 		userTokens = make(map[string]string)
 	}
-	userTokens[token] = token
-	tokenStore.store[userId] = userTokens
+	userTokens[tokenID] = tokenID
+	tokenStore.store[userID] = userTokens
 	return nil
 }
 
-func (tokenStore *inMemoryTokenStore) Lookup(userId, token string) (string, error) {
+func (tokenStore *inMemoryTokenStore) Lookup(userID, token string) (string, error) {
 	tokenStore.RLock()
 	defer tokenStore.RUnlock()
-	if userTokens, ok := tokenStore.store[userId]; ok {
+	if userTokens, ok := tokenStore.store[userID]; ok {
 		token, _ := userTokens[token]
 		return token, nil
 	}
 	return "", nil
 }
 
-func (tokenStore *inMemoryTokenStore) Revoke(userId, token string) error {
+func (tokenStore *inMemoryTokenStore) Revoke(userID, token string) error {
 	tokenStore.Lock()
 	defer tokenStore.Unlock()
-	if userTokens, ok := tokenStore.store[userId]; ok {
+	if userTokens, ok := tokenStore.store[userID]; ok {
 		delete(userTokens, token)
 	}
 	return nil
 }
 
-func (tokenStore *inMemoryTokenStore) List(userId string) ([]string, error) {
+func (tokenStore *inMemoryTokenStore) List(userID string) ([]string, error) {
 	tokenStore.Lock()
 	defer tokenStore.Unlock()
-	if userTokens, ok := tokenStore.store[userId]; ok {
+	if userTokens, ok := tokenStore.store[userID]; ok {
 		tokens := make([]string, len(userTokens))
 		i := 0
 		for k := range userTokens {
@@ -108,31 +108,31 @@ func NewVaultTokenStore() TokenStore {
 	return vaultTokenStore{client: client, logical: logical}
 }
 
-func tokenPath(userId, token string) string {
-	return fmt.Sprintf("secret/accesstokens/%s/%s", userId, token)
+func tokenPath(userID, tokenID string) string {
+	return fmt.Sprintf("secret/accesstokens/%s/%s", userID, tokenID)
 }
 
-func (tokenStore vaultTokenStore) Store(userId, token string) error {
-	data := map[string]interface{}{"token": token}
-	_, err := tokenStore.logical.Write(tokenPath(userId, token), data)
+func (tokenStore vaultTokenStore) Store(userID, tokenID string) error {
+	data := map[string]interface{}{"token": tokenID}
+	_, err := tokenStore.logical.Write(tokenPath(userID, tokenID), data)
 	return err
 }
 
-func (tokenStore vaultTokenStore) Lookup(userId, token string) (string, error) {
-	secret, err := tokenStore.logical.Read(tokenPath(userId, token))
+func (tokenStore vaultTokenStore) Lookup(userID, tokenID string) (string, error) {
+	secret, err := tokenStore.logical.Read(tokenPath(userID, tokenID))
 	if err != nil {
 		return "", err
 	}
 	return secret.Data["token"].(string), nil
 }
 
-func (tokenStore vaultTokenStore) Revoke(userId, token string) error {
-	_, err := tokenStore.logical.Delete(tokenPath(userId, token))
+func (tokenStore vaultTokenStore) Revoke(userID, tokenID string) error {
+	_, err := tokenStore.logical.Delete(tokenPath(userID, tokenID))
 	return err
 }
 
-func (tokenStore vaultTokenStore) List(userId string) ([]string, error) {
-	secret, err := tokenStore.logical.List(fmt.Sprintf("secret/accesstokens/%s", userId))
+func (tokenStore vaultTokenStore) List(userID string) ([]string, error) {
+	secret, err := tokenStore.logical.List(fmt.Sprintf("secret/accesstokens/%s", userID))
 	if err != nil {
 		return nil, err
 	}
