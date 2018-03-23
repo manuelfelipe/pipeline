@@ -3,15 +3,26 @@ package auth
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/banzaicloud/bank-vaults/vault"
 	vaultapi "github.com/hashicorp/vault/api"
 )
 
+// Verify tokenstores satisfy the correct interface
+var _ TokenStore = (*inMemoryTokenStore)(nil)
+var _ TokenStore = (*vaultTokenStore)(nil)
+
+// Token represents an access token
+type Token struct {
+	Name      string
+	CreatedAt time.Time
+}
+
 // TokenStore is general interface for storing access tokens
 type TokenStore interface {
-	Store(string, string) error
-	Lookup(string, string) (bool, error)
+	Store(userID string, token string) error
+	Lookup(userID string, tokenID string) (string, error)
 	Revoke(string, string) error
 	List(string) ([]string, error)
 }
@@ -20,35 +31,35 @@ type TokenStore interface {
 
 // NewInMemoryTokenStore is a basic in-memory TokenStore implementation (thread-safe)
 func NewInMemoryTokenStore() TokenStore {
-	return &inMemoryTokenStore{store: make(map[string]map[string]bool)}
+	return &inMemoryTokenStore{store: make(map[string]map[string]string)}
 }
 
 type inMemoryTokenStore struct {
 	sync.RWMutex
-	store map[string]map[string]bool
+	store map[string]map[string]string
 }
 
 func (tokenStore *inMemoryTokenStore) Store(userId, token string) error {
 	tokenStore.Lock()
 	defer tokenStore.Unlock()
-	var userTokens map[string]bool
+	var userTokens map[string]string
 	var ok bool
 	if userTokens, ok = tokenStore.store[userId]; !ok {
-		userTokens = make(map[string]bool)
+		userTokens = make(map[string]string)
 	}
-	userTokens[token] = true
+	userTokens[token] = token
 	tokenStore.store[userId] = userTokens
 	return nil
 }
 
-func (tokenStore *inMemoryTokenStore) Lookup(userId, token string) (bool, error) {
+func (tokenStore *inMemoryTokenStore) Lookup(userId, token string) (string, error) {
 	tokenStore.RLock()
 	defer tokenStore.RUnlock()
 	if userTokens, ok := tokenStore.store[userId]; ok {
-		_, found := userTokens[token]
-		return found, nil
+		token, _ := userTokens[token]
+		return token, nil
 	}
-	return false, nil
+	return "", nil
 }
 
 func (tokenStore *inMemoryTokenStore) Revoke(userId, token string) error {
@@ -107,12 +118,12 @@ func (tokenStore vaultTokenStore) Store(userId, token string) error {
 	return err
 }
 
-func (tokenStore vaultTokenStore) Lookup(userId, token string) (bool, error) {
+func (tokenStore vaultTokenStore) Lookup(userId, token string) (string, error) {
 	secret, err := tokenStore.logical.Read(tokenPath(userId, token))
 	if err != nil {
-		return false, err
+		return "", err
 	}
-	return secret != nil, nil
+	return secret.Data["token"].(string), nil
 }
 
 func (tokenStore vaultTokenStore) Revoke(userId, token string) error {

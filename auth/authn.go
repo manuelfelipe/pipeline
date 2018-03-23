@@ -83,14 +83,15 @@ type DroneClaims struct {
 	Text string `json:"text,omitempty"`
 }
 
-func lookupAccessToken(userId, token string) (bool, error) {
+func lookupAccessToken(userId, token string) (string, error) {
 	return tokenStore.Lookup(userId, token)
 }
 
 func validateAccessToken(claims *ScopedClaims) (bool, error) {
 	userID := claims.Subject
 	tokenID := claims.Id
-	return lookupAccessToken(userID, tokenID)
+	token, err := lookupAccessToken(userID, tokenID)
+	return token != "", err
 }
 
 //Init initialize the auth
@@ -201,6 +202,59 @@ func GenerateToken(c *gin.Context) {
 			log.Info(c.ClientIP(), err.Error())
 		} else {
 			c.JSON(http.StatusOK, gin.H{"token": signedToken})
+		}
+	}
+}
+
+func GetTokens(c *gin.Context) {
+	currentUser := GetCurrentUser(c.Request)
+	if currentUser == nil {
+		err := c.AbortWithError(http.StatusUnauthorized, fmt.Errorf("Invalid session"))
+		log.Info(c.ClientIP(), err.Error())
+		return
+	}
+	tokenID := c.Param("id")
+
+	if tokenID == "" {
+		tokens, err := tokenStore.List(currentUser.IDString())
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, err)
+		} else {
+			c.JSON(http.StatusOK, tokens)
+		}
+	} else {
+		token, err := tokenStore.Lookup(currentUser.IDString(), tokenID)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, err)
+		} else if token != "" {
+			c.JSON(http.StatusOK, token)
+		} else {
+			c.AbortWithStatusJSON(http.StatusNotFound, btype.ErrorResponse{
+				Code:    http.StatusNotFound,
+				Message: "Token not found",
+				Error:   "Token not found",
+			})
+		}
+	}
+}
+
+func DeleteToken(c *gin.Context) {
+	currentUser := GetCurrentUser(c.Request)
+	if currentUser == nil {
+		err := c.AbortWithError(http.StatusUnauthorized, fmt.Errorf("Invalid session"))
+		log.Info(c.ClientIP(), err.Error())
+		return
+	}
+	tokenID := c.Param("id")
+
+	if tokenID == "" {
+		c.AbortWithStatusJSON(http.StatusBadRequest, fmt.Errorf("Missing token id"))
+	} else {
+		err := tokenStore.Revoke(currentUser.IDString(), tokenID)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, err)
+		} else {
+			c.Status(http.StatusNoContent)
 		}
 	}
 }
