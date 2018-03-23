@@ -21,10 +21,10 @@ type Token struct {
 
 // TokenStore is general interface for storing access tokens
 type TokenStore interface {
-	Store(userID string, token string) error
+	Store(userID string, tokenID string) error
 	Lookup(userID string, tokenID string) (string, error)
-	Revoke(string, string) error
-	List(string) ([]string, error)
+	Revoke(userID string, tokenID string) error
+	List(userID string) ([]string, error)
 }
 
 // In-memory implementation
